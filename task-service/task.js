@@ -1,6 +1,9 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
+const https = require('https');
+const fs = require('fs');
+
 
 const app = express();
 app.use(express.json());
@@ -24,7 +27,7 @@ const authMiddleware = (req, res, next) => {
   });
 };
 
-app.post('/tasks', authMiddleware, async (req, res) => {
+app.post('/tasks', async (req, res) => {
   const { title, description } = req.body;
   const task = new Task({ title, description, userId: req.userId });
   await task.save();
@@ -46,4 +49,11 @@ app.delete('/tasks/:id', authMiddleware, async (req, res) => {
   res.status(204).send();
 });
 
-app.listen(3001, () => console.log('Task Service running on port 3001'));
+const options = {
+  key: fs.readFileSync('private.key'),
+  cert: fs.readFileSync('cert.pem')
+};
+
+https.createServer(options, app).listen(3001, () => {
+  console.log('Task Service running on HTTPS port 3001');
+});

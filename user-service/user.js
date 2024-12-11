@@ -2,6 +2,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const https = require('https');
+const fs = require('fs');
 
 const app = express();
 app.use(express.json());
@@ -33,4 +35,11 @@ app.post('/users/login', async (req, res) => {
     res.json({ token });
   });
 
-  app.listen(3000, () => console.log('User Service running on port 3000'));
+  const options = {
+    key: fs.readFileSync('private.key'),
+    cert: fs.readFileSync('cert.pem')
+  };
+
+  https.createServer(options, app).listen(3000, () => {
+    console.log('User Service running on HTTPS port 3000');
+  });
