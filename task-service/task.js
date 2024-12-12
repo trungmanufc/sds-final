@@ -4,9 +4,9 @@ const jwt = require('jsonwebtoken');
 const https = require('https');
 const fs = require('fs');
 
-
+const axios = require('axios');
 const app = express();
-const userServiceUrl = "http://user-service.default.svc.cluster.local/users/";
+const userServiceUrl = "https://user-app.2012210.rahtiapp.fi/users";
 app.use(express.json());
 
 // Connect to MongoDB
@@ -16,20 +16,26 @@ mongoose.connect('mongodb://mongo:27017/taskdb', { useNewUrlParser: true, useUni
 const Task = mongoose.model('Task', new mongoose.Schema({
   title: { type: String, required: true },
   description: String,
-  userId: { type: Number, required: true }
+  userNumber: { type: Number, required: true }
 }));
 
-async function verifyUser(userId) {
-  try {
-    const response = await axios.get(`${userServiceUrl}/${userId}`);
+const httpsAgent = new (require('https').Agent)({
+  rejectUnauthorized: false
+});
 
+async function verifyUser(userNumber) {
+  try {
     // If user is valid, return user data
+    const url = `${userServiceUrl}/${userNumber}`;
+    console.log('connect to:' + url) ;
+    const response = await axios.get(url, { httpsAgent });
     return response.data;
   } catch (error) {
     // Handle the error (e.g., user not found, invalid token)
-    throw new Error("User validation failed");
+    throw new Error(error.message);
   }
 }
+
 
 
 // POST /tasks - Create a new task
