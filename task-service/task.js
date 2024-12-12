@@ -6,54 +6,85 @@ const fs = require('fs');
 
 
 const app = express();
+const userServiceUrl = "http://user-service.default.svc.cluster.local/users/";
 app.use(express.json());
 
+// Connect to MongoDB
 mongoose.connect('mongodb://mongo:27017/taskdb', { useNewUrlParser: true, useUnifiedTopology: true });
 
+// Task model
 const Task = mongoose.model('Task', new mongoose.Schema({
   title: { type: String, required: true },
   description: String,
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }
+  userId: { type: Number, required: true }
 }));
 
-const authMiddleware = (req, res, next) => {
-  const token = req.headers['authorization'];
-  if (!token) return res.status(401).send({ message: 'Token missing' });
+async function verifyUser(userId) {
+  try {
+    const response = await axios.get(`${userServiceUrl}/${userId}`);
 
-  jwt.verify(token, 'secretKey', (err, decoded) => {
-    if (err) return res.status(401).send({ message: 'Invalid token' });
-    req.userId = decoded.userId;
-    next();
-  });
-};
+    // If user is valid, return user data
+    return response.data;
+  } catch (error) {
+    // Handle the error (e.g., user not found, invalid token)
+    throw new Error("User validation failed");
+  }
+}
 
+
+// POST /tasks - Create a new task
 app.post('/tasks', async (req, res) => {
-  const { title, description } = req.body;
-  const task = new Task({ title, description, userId: req.userId });
-  await task.save();
-  res.status(201).send(task);
+  const { title, description, userNumber } = req.body;
+  if (!title) return res.status(400).send({ message: 'Title is required' });
+
+  const user = await verifyUser(userNumber);
+
+  try {
+    const task = new Task({ title, description, userNumber });
+    await task.save();
+    res.status(201).send(task);
+  } catch (err) {
+    res.status(500).send({ message: 'Error creating task', error: err.message });
+  }
 });
 
-app.get('/tasks', authMiddleware, async (req, res) => {
-  const tasks = await Task.find({ userId: req.userId });
-  res.json(tasks);
+// GET /tasks - Get tasks for the user
+app.get('/tasks', async (req, res) => {
+  try {
+    const tasks = await Task.find();
+    res.json(tasks);
+  } catch (err) {
+    res.status(500).send({ message: 'Error fetching tasks', error: err.message });
+  }
 });
 
-app.put('/tasks/:id', authMiddleware, async (req, res) => {
-  const task = await Task.findByIdAndUpdate(req.params.id, req.body, { new: true });
-  res.json(task);
+// PUT /tasks/:id - Update a task
+app.put('/tasks/:id', async (req, res) => {
+  try {
+    const task = await Task.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json(task);
+  } catch (err) {
+    res.status(500).send({ message: 'Error updating task', error: err.message });
+  }
 });
 
-app.delete('/tasks/:id', authMiddleware, async (req, res) => {
-  await Task.findByIdAndDelete(req.params.id);
-  res.status(204).send();
+// DELETE /tasks/:id - Delete a task
+app.delete('/tasks/:id', async (req, res) => {
+  try {
+    await Task.findByIdAndDelete(req.params.id);
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).send({ message: 'Error deleting task', error: err.message });
+  }
 });
 
+// HTTPS options (using certificates)
 const options = {
   key: fs.readFileSync('private.key'),
   cert: fs.readFileSync('cert.pem')
 };
 
+// Create the HTTPS server
 https.createServer(options, app).listen(3001, () => {
   console.log('Task Service running on HTTPS port 3001');
 });
